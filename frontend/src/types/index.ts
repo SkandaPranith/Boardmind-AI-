@@ -61,10 +61,24 @@ export interface GenerateNotesResponse {
   message: string;
 }
 
+export interface CVPipelineMetadata {
+  perspective_rectified: boolean;
+  corners_detected?: [number, number][];
+  stroke_density_percent: number;
+  segmented_lines_count: number;
+  yolo_model_params: string;
+  detection_losses: string;
+  evaluation_test_mAP50: string;
+  evaluation_test_mAP50_95: string;
+}
+
 export interface ProcessResponse {
   success: boolean;
   detection: DetectResponse;
   cropped_whiteboard: string | null;
+  cv_diagnostic_image?: string | null;
+  binary_mask_image?: string | null;
+  cv_metadata?: CVPipelineMetadata;
   text_extraction: ExtractTextResponse;
   structured_notes: StructuredNotes;
   ai_concept_explanation?: string;

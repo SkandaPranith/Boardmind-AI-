@@ -14,7 +14,7 @@ An end-to-end computer-vision + OCR + LLM platform that detects a whiteboard in 
 [![PyTorch](https://img.shields.io/badge/PyTorch-CPU-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
-**Frontend:** http://127.0.0.1:5174 &nbsp;•&nbsp; **API Docs:** http://127.0.0.1:8001/docs &nbsp;•&nbsp; **Health:** http://127.0.0.1:8001/api/health
+**Frontend:** http://127.0.0.1:5174 &nbsp;•&nbsp; **API Docs:** http://127.0.0.1:8001/docs &nbsp;•&nbsp; **Health:** http://127.0.0.1:8001/api/health &nbsp;•&nbsp; **Project Evolution & Audit:** [PROJECT_EVOLUTION.md](PROJECT_EVOLUTION.md)
 
 </div>
 

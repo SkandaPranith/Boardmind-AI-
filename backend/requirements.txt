@@ -8,4 +8,8 @@ torch>=2.1.0
 ultralytics>=8.1.0
 numpy>=1.26.0
 PyYAML>=6.0.0
+rapidocr>=3.0.0
+onnxruntime>=1.17.0
+pandas>=2.1.0
+pyarrow>=14.0.0
 

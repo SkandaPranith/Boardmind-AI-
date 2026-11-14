@@ -21,26 +21,38 @@ from PIL import Image
 from backend.app.schemas.models import ExtractTextResponse, RecognizedLine
 
 try:
-    from rapidocr_onnxruntime import RapidOCR
+    from rapidocr import RapidOCR
     RAPID_OCR_AVAILABLE = True
 except ImportError:
-    RAPID_OCR_AVAILABLE = False
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+        RAPID_OCR_AVAILABLE = True
+    except ImportError:
+        RAPID_OCR_AVAILABLE = False
 
 
 def post_process_academic_text(text: str) -> str:
-    """Corrects common handwriting OCR errors on classroom whiteboards."""
-    corrections = [
-        (r'\b(supevuki\s*clnkn\s*reyn|sp:cl\s*rey)\b', 'Supervised: Classification, Regression'),
-        (r'\b(uscl\.ad|usclg\.a,d)\b', 'Unsupervised: Clustering, Association, Dim. Reduc.'),
-        (r'\b(esimtieg\s*hene|esting\s*hen)\b', 'Estimating Home $'),
-        (r'\b(featukes|fe\'a\'t\'lkes)\b', 'FEATURES'),
-        (r'\b(kegle\.caon|keg/e-co)\b', 'Kaggle.com'),
-        (r'\b(am mdd\s*auy\s*sgdtuedu|ammedel\s*isonly\s*asgodsthe\s*daa)\b', 'A ML model is only as good as the data'),
-        (r'\b(overfit|overft|avoid\s*over)\b', 'Avoid Overfitting'),
-    ]
-    for pattern, replacement in corrections:
-        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
-    return text
+    """
+    Generalized text normalization for whiteboard OCR output:
+    - Normalizes common OCR ligature and stroke noise.
+    - Cleans duplicate or floating punctuation from dry-erase specks.
+    - Standardizes academic bullet markers and mathematical operators.
+    """
+    if not text:
+        return text
+
+    # Standardize bullet markers and arrows
+    text = re.sub(r'^[•·*~-]\s*', '• ', text)
+    text = re.sub(r'\s*->\s*', ' → ', text)
+    text = re.sub(r'\s*=>\s*', ' ⇒ ', text)
+
+    # Normalize mathematical operators and equal signs
+    text = re.sub(r'\s*([=+\-/*])\s*', r' \1 ', text)
+    text = re.sub(r'\s{2,}', ' ', text)
+
+    # Remove erratic trailing marker speck punctuation (e.g. "term,,.", "word''")
+    text = re.sub(r'[,;.\'`"]{2,}$', '', text)
+    return text.strip()
 
 
 class BaseHandwritingRecognizer(ABC):
@@ -161,7 +173,18 @@ class ModularHandwritingRecognizer(BaseHandwritingRecognizer):
 
         if self.ocr_engine is not None:
             try:
-                ocr_results, _ = self.ocr_engine(cv_for_ocr)
+                raw_res = self.ocr_engine(cv_for_ocr)
+                ocr_results = []
+                # Modern rapidocr (Python 3.13+): object with .boxes, .txts, .scores
+                if hasattr(raw_res, "txts") and raw_res.txts:
+                    for box, txt, score in zip(raw_res.boxes, raw_res.txts, raw_res.scores):
+                        ocr_results.append([box, txt, score])
+                # Legacy rapidocr_onnxruntime: tuple of (results, elapse)
+                elif isinstance(raw_res, tuple) and len(raw_res) >= 1:
+                    ocr_results = raw_res[0] or []
+                elif isinstance(raw_res, list):
+                    ocr_results = raw_res
+
                 if ocr_results:
                     # Sort boxes by ymin (top-to-bottom reading order)
                     def get_ymin(item):

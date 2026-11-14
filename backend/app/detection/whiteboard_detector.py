@@ -30,16 +30,19 @@ class WhiteboardDetector:
         if user_path and Path(user_path).exists():
             return Path(user_path)
 
+        project_root = Path(__file__).resolve().parent.parent.parent
         candidates = [
+            project_root / "models" / "whiteboard_detector_best.pt",
             Path("models/whiteboard_detector_best.pt"),
-            Path("runs/whiteboard_optimization/exp1_aug_perspective_scale/weights/best.pt"),
-            Path("runs/whiteboard_detection_test/weights/best.pt"),
+            project_root / "runs" / "whiteboard_optimization" / "exp1_aug_perspective_scale" / "weights" / "best.pt",
+            project_root / "runs" / "whiteboard_detection_test" / "weights" / "best.pt",
+            project_root / "yolov8n.pt",
             Path("yolov8n.pt")
         ]
         for c in candidates:
             if c.exists():
                 return c.resolve()
-        raise FileNotFoundError("No trained whiteboard detection checkpoint found.")
+        raise FileNotFoundError("No trained whiteboard detection checkpoint found in models/ or runs/.")
 
     def detect(
         self,

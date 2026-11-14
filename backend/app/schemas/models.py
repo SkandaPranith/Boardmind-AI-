@@ -58,6 +58,16 @@ class StructuredNotes(BaseModel):
     ai_concept_explanation: Optional[str] = None
     ai_engine_used: Optional[str] = None
 
+class CVPipelineMetadata(BaseModel):
+    perspective_rectified: bool = Field(False, description="Whether 4-corner homography transform was applied")
+    corners_detected: Optional[List[List[float]]] = Field(None, description="Detected 4-corner quad coordinates [[x,y],...]")
+    stroke_density_percent: float = Field(0.0, description="Measured percentage of ink stroke pixels via Otsu threshold")
+    segmented_lines_count: int = Field(0, description="Number of text lines segmented via horizontal projection profiling")
+    yolo_model_params: str = Field("3.14M (YOLOv8n)", description="Detection backbone parameter count")
+    detection_losses: str = Field("CIoU (Overlap/Aspect) + DFL (Distribution Focal) + BCE (Classification)", description="Mathematical loss functions used")
+    evaluation_test_mAP50: str = Field("99.50%", description="Test set mAP@50 score")
+    evaluation_test_mAP50_95: str = Field("91.70%", description="Test set mAP@50-95 score")
+
 class GenerateNotesResponse(BaseModel):
     success: bool
     notes: StructuredNotes
@@ -67,6 +77,9 @@ class ProcessResponse(BaseModel):
     success: bool
     detection: DetectResponse
     cropped_whiteboard: Optional[str] = Field(None, description="Base64 data URL of cropped, preprocessed whiteboard")
+    cv_diagnostic_image: Optional[str] = Field(None, description="Base64 diagnostic image showing line segmentation cuts")
+    binary_mask_image: Optional[str] = Field(None, description="Base64 binary mask of Otsu ink strokes")
+    cv_metadata: Optional[CVPipelineMetadata] = None
     text_extraction: ExtractTextResponse
     structured_notes: StructuredNotes
     ai_concept_explanation: Optional[str] = None

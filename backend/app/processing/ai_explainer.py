@@ -8,13 +8,17 @@ This AI layer analyzes recognized keywords, equations, and visual whiteboard con
 the overarching concept, reconstruct messy phrases, and produce comprehensive educational notes.
 
 Supported Engines:
-1. Groq Cloud LLM (Llama-3.3-70b-versatile / Llama-3.1-8b-instant) - Ultra-fast, deep academic explanations.
-2. Google Gemini Multimodal Vision (Gemini 1.5 Flash).
-3. BoardMind Deep Academic Synthesizer - 100% offline CPU mode, robust to handwriting OCR noise.
+1. Local Ollama Edge Engine (llama3.2:3b / qwen2.5:3b) - 100% Offline, on-premise private edge LLM.
+2. Groq Cloud LLM (Llama-3.3-70b-versatile) - High-throughput cloud LLM.
+3. Google Gemini Multimodal Vision (Gemini 1.5 Flash).
+4. BoardMind Deep Academic Synthesizer - 100% offline CPU mode, robust to handwriting OCR noise.
 """
 
 import os
 import re
+import json
+import urllib.request
+import urllib.error
 from typing import Optional, Dict, Any, List
 from PIL import Image
 from dotenv import load_dotenv
@@ -39,6 +43,17 @@ class AIConceptExplainer:
     def __init__(self):
         self.groq_api_key = os.environ.get("GROQ_API_KEY", "").strip()
         self.gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        self.ollama_host = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").strip()
+        self.ollama_model = os.environ.get("OLLAMA_MODEL", "llama3.2:3b").strip()
+
+    def check_ollama_available(self) -> bool:
+        """Pings local Ollama service with a strict 0.8s timeout."""
+        try:
+            req = urllib.request.Request(f"{self.ollama_host.rstrip('/')}/api/tags", method="GET")
+            with urllib.request.urlopen(req, timeout=0.8) as resp:
+                return resp.status == 200
+        except Exception:
+            return False
 
     def explain(
         self,
@@ -49,8 +64,25 @@ class AIConceptExplainer:
     ) -> Dict[str, Any]:
         """
         Generates an educational concept explanation from whiteboard contents.
-        Prioritizes Groq LLM, then Gemini Vision, then Built-in Academic Synthesizer.
+        Priority:
+        1. Local Ollama Edge LLM (Privacy-preserving, offline)
+        2. Groq Cloud LLM (Llama 3.3 70B)
+        3. Gemini Vision AI
+        4. Built-in Academic Synthesizer
         """
+        # 1. Local Ollama Edge LLM (Private & On-Premise)
+        if self.check_ollama_available():
+            try:
+                explanation = self._explain_with_ollama(raw_text, topic_hint)
+                if explanation:
+                    return {
+                        "title": self._extract_title_from_md(explanation) or topic_hint or "Lecture Concept Explanation",
+                        "explanation_markdown": explanation,
+                        "engine": f"Local Ollama Edge Engine ({self.ollama_model})"
+                    }
+            except Exception as e:
+                print(f"[AI Explainer Warning] Local Ollama call failed, attempting cloud fallbacks: {e}")
+
         # Reload env in case it was updated at runtime
         active_groq_key = (
             api_key if (api_key and api_key.startswith("gsk_"))
@@ -61,7 +93,7 @@ class AIConceptExplainer:
             else os.environ.get("GEMINI_API_KEY", self.gemini_api_key).strip()
         )
 
-        # 1. Groq High-Speed LLM (Llama-3.3 70B)
+        # 2. Groq High-Speed LLM (Llama-3.3 70B)
         if active_groq_key and GROQ_AVAILABLE:
             try:
                 explanation = self._explain_with_groq(raw_text, topic_hint, active_groq_key)
@@ -74,7 +106,7 @@ class AIConceptExplainer:
             except Exception as e:
                 print(f"[AI Explainer Warning] Groq call failed, attempting fallbacks: {e}")
 
-        # 2. Gemini Multimodal Vision AI
+        # 3. Gemini Multimodal Vision AI
         if active_gemini_key and GENAI_AVAILABLE and image is not None:
             try:
                 explanation = self._explain_with_gemini(image, raw_text, topic_hint, active_gemini_key)
@@ -87,13 +119,62 @@ class AIConceptExplainer:
             except Exception as e:
                 print(f"[AI Explainer Warning] Gemini call failed, falling back to built-in synthesizer: {e}")
 
-        # 3. Built-in Academic Concept Synthesizer (Offline CPU)
+        # 4. Built-in Academic Concept Synthesizer (Offline CPU)
         explanation = self._synthesize_concept(raw_text, topic_hint)
         return {
             "title": self._extract_title_from_md(explanation) or topic_hint or "Whiteboard Concept Breakdown",
             "explanation_markdown": explanation,
             "engine": "BoardMind Academic Synthesizer (Built-in CPU)"
         }
+
+    def _explain_with_ollama(
+        self,
+        raw_text: str,
+        topic_hint: Optional[str]
+    ) -> str:
+        """
+        Generates structured academic study notes using a locally running Ollama instance.
+        """
+        prompt = f"""You are a distinguished university professor and academic teaching assistant.
+A student took a photo of their classroom whiteboard. The raw computer-vision OCR detected the following text fragments from the board:
+\"\"\"{raw_text}\"\"\"
+Topic Hint: {topic_hint or 'Classroom Lecture Notes'}
+
+Please synthesize this into comprehensive, clean academic study notes.
+Structure your output in GitHub-Flavored Markdown with KaTeX formulas ($$ ... $$):
+- # [Comprehensive Lecture Title]
+- ## 🎯 1. Executive Summary & Core Concept
+- ## 🔍 2. Detailed Technical Breakdown & Definitions
+- ## 📊 3. Comparative Taxonomy or Key Attributes
+- ## 📐 4. Mathematical Formulations & Update Rules
+- ## ⚠️ 5. Golden Rules, Caveats & Overfitting Prevention
+- ## 📝 6. Actionable Exam Revision Summary
+
+Do not hallucinate irrelevant topics. Preserve the true academic meaning of the whiteboard notes."""
+
+        url = f"{self.ollama_host.rstrip('/')}/api/generate"
+        payload = {
+            "model": self.ollama_model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.25,
+                "num_predict": 768
+            }
+        }
+
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+
+        with urllib.request.urlopen(req, timeout=35) as response:
+            if response.status == 200:
+                result_json = json.loads(response.read().decode("utf-8"))
+                return result_json.get("response", "")
+        return ""
 
     def _explain_with_groq(
         self,

@@ -2,8 +2,8 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-.venv/
-venv/
+.venv*/
+venv*/
 
 # Environment / secrets
 .env
@@ -21,9 +21,15 @@ dist-ssr/
 _structure.txt
 routes_check.txt
 push_result.txt
+scratch/
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
 
 # ML datasets and training artifacts (large, reproducible)
-datasets/
+datasets/*
+!datasets/README.md
+!datasets/campus_test_set
+!datasets/campus_test_set/*
 runs/
 notebooks/*.pt
 /yolov8n.pt
