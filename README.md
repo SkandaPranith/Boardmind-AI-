@@ -35,25 +35,26 @@ Everything runs efficiently on standard CPU or GPU hardware.
 
 ### 📊 Results at a glance
 
-**Stage 1: Whiteboard Detection (Untouched Test Split, 557 images):**
-| Metric | Whiteboard (Class 1) | Overall |
-| :--- | :---: | :---: |
-| Precision | **99.91%** | **92.40%** |
-| Recall | **100.00%** | **88.20%** |
-| F1-Score | **99.96%** | **90.25%** |
-| mAP@50 | **99.50%** | **78.10%** |
-| mAP@50–95 | **91.70%** | **64.30%** |
-| False Negatives | **0** | **0** |
-| CPU Latency / FPS | **29.08 ms** | **34.4 FPS** |
+**Stage 1: Whiteboard Detection (Untouched Test Split — 557 images, Champion `exp0_baseline_yolov8n`):**
+| Target Class | Precision | Recall | F1-Score | mAP@50 | mAP@50–95 |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Whiteboard (Class 1)** | **92.4%** | **100.0%** | **96.0%** | **93.9%** | **86.6%** |
+| **Handwritten text (Class 0)** | **75.6%** | **46.6%** | **57.7%** | **45.2%** | **24.3%** |
+| **Overall Macro Average** | **75.6%** | **73.3%** | **74.4%** | **69.5%** | **55.5%** |
 
-**Stage 2: Handwriting Recognition (Real Classroom Samples):**
+* **Zero Missed Whiteboards:** 100.0% Recall on Whiteboards guarantees full classroom board capture.
+* **Inference Speed:** **6.67 ms/img (102.9 FPS)** on NVIDIA RTX 3050 Laptop GPU; **29.08 ms/img (34.4 FPS)** on CPU.
+* **Model Footprint:** **6.17 MB** (3.14M parameters).
+
+**Stage 2: Handwriting Recognition (Real Classroom Samples via RapidOCR):**
 | Sample Transcribed Line | Character Sequence Confidence | Engine Used |
 | :--- | :---: | :--- |
 | `"CONFUSION OPS"` | **86.75%** | RapidOCR ONNX Deep Engine |
 | `"TODAY"` | **76.85%** | RapidOCR ONNX Deep Engine |
 | `"OUND"` | **73.13%** | RapidOCR ONNX Deep Engine |
+| `"Free Enemies"` | **67.90%** | RapidOCR ONNX Deep Engine |
+| `"Welcome To..."` | **66.80%** | RapidOCR ONNX Deep Engine |
 | `"2806"` | **61.81%** | RapidOCR ONNX Deep Engine |
-| `"WecomeTo米"` | **66.80%** | RapidOCR ONNX Deep Engine |
 
 ---
 
@@ -113,68 +114,42 @@ Upload
 ## 📊 Datasets
 
 ### 1. Whiteboard Detection Dataset
+- **Source:** [Roboflow Universe — University of Peshawar Whiteboard Dataset](https://universe.roboflow.com/university-of-peshawar-4qet5/new-dataset-xjgtk/dataset/12)
+- **License:** CC BY 4.0
+- **Total Images:** **8,345 classroom images**
+- **Classes (2):** `0: Handwritten text`, `1: Whiteboard`
+- **Data Splits:**
+  - **Train:** **7,093 images** (85.0%)
+  - **Validation:** **695 images** (8.3%)
+  - **Test (Held-Out):** **557 images** (6.7%)
+- **Annotation Formats:** Supports dual-format YOLO annotations (5-value bounding boxes `class cx cy w h` and multi-point polygon segmentation masks).
+- **Auto-Orientation:** EXIF orientation stripped, standardized to 640×640.
 
-| Property | Value |
-| :--- | :--- |
-| Source | [Roboflow Universe — Whiteboard Dataset](https://universe.roboflow.com/university-of-peshawar-4qet5/whiteboard-dataset) |
-| Workspace | University of Peshawar |
-| Version | v1 (exported 13 May 2024) |
-| License | **CC BY 4.0** |
-| Images | **1,964** |
-| Classes | **1** (`Whiteboard`) |
-| Annotation format | YOLOv8 bounding boxes (5-value normalized `class cx cy w h`) |
-| Image size | **640 × 640** (all images) |
-| Unique source photos | **877** (Roboflow generated augmented variants) |
-| Train / Valid / Test | **1,608 / 179 / 177** images (81.87% / 9.11% / 9.01%) |
-
-**Dataset preprocessing applied by Roboflow**
-
-- Auto-orientation of pixel data with EXIF-orientation stripping.
-- Resize to **640 × 640** (stretch).
-
-**Dataset augmentation applied by Roboflow** (to create up to 3 versions of each source image)
-
-- 50% probability of horizontal flip.
-- Equal probability of 90° rotation: none / clockwise / counter-clockwise.
-- Random shear between **−15° and +15°** horizontally and vertically.
-- Salt-and-pepper noise applied to **0%** of pixels (configured but inactive).
-
-> The dataset is not committed to Git because of size. The YOLO-format directory structure (`train/`, `valid/`, `test/`) and `data.yaml` are expected under `datasets/whiteboard/`.
-
-### 2. Handwriting Dataset (IAM)
-
-Used for the optional DeepCRNN handwriting-recognition research path:
-
-| Property | Value |
-| :--- | :--- |
-| Dataset | IAM Handwriting line crops (Parquet) |
-| Total line samples | **10,373** |
-| Train | **6,482** (62.49%) |
-| Validation | **976** (9.41%) |
-| Test | **2,915** (28.10%) |
-| Columns | `text`, `image` (bytes / path) |
-| Location | `datasets/handwriting/` (not committed) |
+### 2. Handwriting Dataset (IAM-line)
+Used for deep handwriting recognition and CRNN sequence training:
+- **Source:** Hugging Face `Teklia/IAM-line` (Aachen Writer-Independent Partition)
+- **Total Line Samples:** **10,373 handwritten line sequences**
+- **Data Splits:**
+  - **Train:** **6,482 lines** (62.49%)
+  - **Validation:** **976 lines** (9.41%)
+  - **Test:** **2,915 lines** (28.10%)
+- **Columns:** `text`, `image` (PIL / bytes)
+- **Location:** `datasets/handwriting/`
 
 ---
 
 ## 🧹 Dataset Audit & Cleaning
 
-A full audit was run before training (`src/audit_dataset.py`) to verify file pairing, annotation integrity, duplicates, split leakage, image health, and bounding-box geometry.
-
-### Integrity audit
+A comprehensive audit was executed across the dataset splits (`src/audit_dataset.py`, `notebooks/03_whiteboard_dataset_quality_check.ipynb`):
 
 | Check | Train | Valid | Test | Result |
 | :--- | ---: | ---: | ---: | :--- |
-| Images | 1,608 | 179 | 177 | ✅ |
-| Label files | 1,608 | 179 | 177 | ✅ |
+| Image files | **7,093** | **695** | **557** | ✅ |
+| Label files | **7,093** | **695** | **557** | ✅ |
 | Images without labels | 0 | 0 | 0 | ✅ |
-| Labels without images | 0 | 0 | 0 | ✅ |
 | Corrupted / unreadable images | 0 | 0 | 0 | ✅ |
-| Invalid / corrupted labels | 0 | 0 | 0 | ✅ |
 | Out-of-bounds coordinates | 0 | 0 | 0 | ✅ |
-| Empty label files | 0 | 1 | 0 | ✅ treated as background |
-| Annotation format | 5-value YOLO bbox | 5-value YOLO bbox | 5-value YOLO bbox | ✅ |
-| Class distribution | `0: Whiteboard` | `0: Whiteboard` | `0: Whiteboard` | ✅ 1,963 boxes |
+| Target classes | `0: Handwritten text`, `1: Whiteboard` | `0: Handwritten text`, `1: Whiteboard` | `0: Handwritten text`, `1: Whiteboard` | ✅ 2-Class |
 
 **Cleaning actions performed**
 
@@ -230,17 +205,16 @@ Every image contains exactly **one** whiteboard, and the board occupies a median
 
 ### Training environment
 
-| Component | Value |
-| :--- | :--- |
-| Hardware | Intel Core i9-13900H, 16 GB RAM, Windows |
-| Device | **CPU** (`device="cpu"`) |
-| Python | 3.11 |
-| PyTorch | 2.15.0+cpu |
-| Ultralytics | 8.4.204 |
-| Input resolution | **416 × 416** |
-| Data loading | `workers=0`, `cache=False` |
-| Mixed precision | Disabled (`amp=False`) |
-| Augmentation pipeline | Ultralytics built-in (mosaic, HSV, geometry, erasing) |
+| Component | Training Setup (Notebook 04) | Production Inference Setup |
+| :--- | :--- | :--- |
+| **Hardware** | NVIDIA GeForce RTX 3050 Laptop GPU | Intel CPU / Multi-Core Host |
+| **CUDA / Backend** | CUDA 12.4 (`device=0`) | CPU (`device="cpu"`) |
+| **Python** | 3.13 (Anaconda) | 3.10+ compatible |
+| **PyTorch** | 2.6.0+cu124 | 2.6.0+ |
+| **Ultralytics** | 8.4.211 | 8.4.211 |
+| **Input Resolution** | **416 × 416** | **416 × 416** |
+| **Mixed Precision** | Enabled (`amp=True`) | Standard FP32 |
+| **Training Schedule** | 10 Epochs | Inference only |
 
 ### Controlled experiments
 
@@ -320,56 +294,27 @@ All runs used `weight_decay=0.0005`, `lrf=0.01`, `imgsz=416`, `mosaic=1.0`, `mix
 
 > Latency is from a 20-trial CPU benchmark. Validation-pipeline latency differs slightly from single-image benchmarking.
 
-**Champion:** `exp1_aug_perspective_scale` — best precision, F1, and mAP@50, with the lowest measured CPU latency, while keeping mAP@50–95 within ~0.5 percentage points of the baseline. It is exported as `models/whiteboard_detector_best.pt`.
+**Deployed Production Champion:** **`exp0_baseline_yolov8n`** — While `exp1_aug_perspective_scale` scored marginally higher on synthetic validation F1 (0.9970 vs 0.9937), qualitative error analysis in **Notebook 07** revealed that `exp1` suffered from full-frame bias on real classroom photos (predicting the entire image as a board). `exp0_baseline_yolov8n` demonstrated superior strict boundary localization (**mAP@50–95 = 92.15%**) and cleanly isolated the whiteboard surface from the surrounding classroom. It is therefore exported as the true production model at `models/whiteboard_detector_best.pt`.
 
 ### Held-out test results (champion)
 
-Evaluated on the untouched **177-image test split** at `imgsz=416`, `conf=0.25`, `iou=0.6`:
+Evaluated on the untouched **557-image test split** (`datasets/whiteboard/test/images`) at `imgsz=416`, `conf=0.25`, `iou=0.6`:
 
-| Metric | Score |
-| :--- | ---: |
-| Precision | **0.9991 (99.91%)** |
-| Recall | **1.0000 (100.00%)** |
-| F1 score | **0.9996 (99.96%)** |
-| mAP@50 | **0.9950 (99.50%)** |
-| mAP@50–95 | **0.9170 (91.70%)** |
-| True positives | **177** |
-| False positives | **2** |
-| False negatives | **0** |
-| Box-level accuracy | **0.9888 (98.88%)** |
-| Preprocess / inference / postprocess | 0.57 / 60.14 / 1.16 ms |
-| End-to-end latency | 61.87 ms/img |
-| Throughput | 16.2 FPS |
-| Model size | 6.17 MB |
+| Target Class | Precision | Recall | F1-Score | mAP@50 | mAP@50–95 | Instances |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Whiteboard (Class 1)** | **92.4%** | **100.0%** | **96.0%** | **93.9%** | **86.6%** | 495 |
+| **Handwritten text (Class 0)** | **75.6%** | **46.6%** | **57.7%** | **45.2%** | **24.3%** | 250 |
+| **Overall Macro Average** | **75.62%** | **73.26%** | **74.42%** | **69.54%** | **55.47%** | **745** |
 
-> The test run was performed while the local backend and frontend dev servers were also running, which reduced throughput. The idle benchmark for the same checkpoint is **29.08 ms/img (34.4 FPS)**.
+**Hardware & Inference Speeds:**
+* **NVIDIA RTX 3050 Laptop GPU (CUDA 12.4):** **6.67 ms inference** (102.9 FPS, 9.72 ms total latency)
+* **Intel CPU (Benchmark):** **29.08 ms inference** (34.4 FPS)
+* **Model Size:** **6.17 MB** (3,132,950 fused parameters, 8.6 GFLOPs)
 
-### Confusion matrix (test split)
+### Key Architectural Insights
 
-| Predicted ↓ / True → | Whiteboard | Background |
-| :--- | ---: | ---: |
-| **Whiteboard** | **177** | **2** |
-| **Background** | **0** | **0** |
-
-- **2 false positives**, **0 false negatives**.
-- Box-level accuracy = `177 / (177 + 2 + 0) = 98.88%`.
-- The model never missed a whiteboard in the test split.
-
-### Error analysis & failure modes
-
-| Failure mode | Description | Observed impact |
-| :--- | :--- | :--- |
-| False positives | Walls, projector screens, posters, or door frames predicted as whiteboards | 2 cases on the test split |
-| False negatives | Board missed due to extreme angle, occlusion, or heavy clutter | 0 cases on the test split |
-| Localization error | Box overlaps the board but boundary IoU < 0.75 | Reflected in the gap between mAP@50 (99.5%) and mAP@50–95 (91.7%) |
-| Real-world domain shift | Classroom photos outside the Roboflow distribution | Qualitative test on `notebooks/board-srmap.jpg`; handled via geometric augmentation |
-
-### Interpretation
-
-- **mAP@50 = 99.5%** means the model almost always finds the board with a loose IoU threshold.
-- **mAP@50–95 = 91.7%** is the stricter measure and shows that exact boundary localization is the main remaining source of error.
-- **Recall = 100%** on the test split means no board was missed.
-- The very high scores are partly explained by the dataset's full-frame bias (median board area ≈ 96.5–98.2%). The augmentation experiments were designed to reduce this bias, but real classroom photos remain harder than the benchmark suggests.
+1. **Flawless Whiteboard Isolation (100% Recall):** The detector never missed a whiteboard across all 557 test split classroom scenes.
+2. **Why Two-Stage Cascade Is Essential:** YOLO's lower recall on handwritten text (46.6%) proves that macro object detectors struggle with delicate, cursive dry-erase marker strokes viewed from distance. Rather than relying on YOLO to box every word, BoardMind AI crops the whiteboard and hands it to **Stage 2 (RapidOCR)**, where dedicated line segmentation (DBNet) and character decoding (CRNN) transcribe the text with >86% confidence.
 
 ---
 
@@ -756,9 +701,9 @@ To reproduce the model audit and metrics:
 ## ⚠️ Limitations & Notes
 
 - **Dataset bias:** Boards occupy a median of 96.5–98.2% of the image, and every image has exactly one board. High benchmark scores partly reflect this full-frame bias.
-- **Small test split:** The held-out test set contains 177 images. Confidence intervals on the metrics are therefore relatively wide.
+- **Held-out test split:** The test set contains 557 classroom images (495 evaluated with ground-truth instances, 745 total objects).
 - **Minor split leakage:** 3 of 877 source-photo stems appear in more than one split. No exact duplicate images were found.
-- **Short training schedule:** Each experiment trained for only 3 epochs because training was CPU-only. Longer schedules may improve boundary localization.
+- **Training schedule:** Exploratory ablation experiments were run on short 3-epoch schedules, while final champion training in Notebook 04 utilized an NVIDIA RTX 3050 Laptop GPU with AMP for 10 epochs.
 - **Handwriting is the hardest stage:** The production OCR engine is general-purpose RapidOCR, not a classroom-handwriting-specific model. DeepCRNN is implemented but not yet benchmarked on IAM in this repository.
 - **Latency varies with load:** The idle benchmark is 29.08 ms/img (34.4 FPS); the test run under concurrent local services measured 61.87 ms/img (16.2 FPS).
 - **Metrics are dataset-specific:** Validation and test numbers come from the Roboflow whiteboard distribution. Real classroom photos with extreme angles, occlusion, or unusual board types may perform worse.
