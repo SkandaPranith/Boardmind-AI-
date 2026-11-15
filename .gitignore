@@ -27,11 +27,11 @@ scratch/
 
 # ML datasets and training artifacts (large, reproducible)
 datasets/*
-!datasets/README.md
 !datasets/campus_test_set
 !datasets/campus_test_set/*
 runs/
 notebooks/*.pt
+notebooks/models/
 /yolov8n.pt
 
 # OS / editor

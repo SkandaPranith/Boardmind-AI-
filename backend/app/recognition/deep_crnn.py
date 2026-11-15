@@ -22,10 +22,11 @@ Architecture Breakdown & Enhanced Hidden Layers:
 """
 
 import math
+from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 
 
 class SEBlock(nn.Module):
@@ -242,3 +243,42 @@ def ctc_greedy_decode(log_probs: torch.Tensor) -> List[str]:
             prev_token = token
         transcriptions.append("".join(tokens))
     return transcriptions
+
+
+def create_deep_crnn(
+    img_channel: int = 1,
+    num_classes: int = 96,
+    hidden_size: int = 512,
+    num_lstm_layers: int = 3,
+    num_attention_heads: int = 8,
+    pretrained_weights: Optional[Union[str, Path]] = None
+) -> DeepCRNN:
+    """
+    Factory function to instantiate and optionally load pretrained weights for DeepCRNN.
+    """
+    model = DeepCRNN(
+        img_channel=img_channel,
+        num_classes=num_classes,
+        hidden_size=hidden_size,
+        num_lstm_layers=num_lstm_layers,
+        num_attention_heads=num_attention_heads
+    )
+    if pretrained_weights:
+        weights_path = Path(pretrained_weights)
+        if weights_path.exists():
+            checkpoint = torch.load(weights_path, map_location='cpu')
+            state_dict = checkpoint.get('state_dict', checkpoint)
+            model.load_state_dict(state_dict)
+    return model
+
+
+__all__ = [
+    'SEBlock',
+    'DeepResidualBlock',
+    'DeepCRNN',
+    'create_deep_crnn',
+    'ctc_greedy_decode',
+    'CHARS',
+    'CHAR2IDX',
+    'IDX2CHAR'
+]

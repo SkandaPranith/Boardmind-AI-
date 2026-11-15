@@ -13,12 +13,14 @@ from pathlib import Path
 # Add src to path
 sys.path.append(str(Path(__file__).resolve().parent))
 
+import torch
 from train_experiment import run_experiment, load_registry, save_registry
 
 def run_all():
+    device_name = f"NVIDIA GPU ({torch.cuda.get_device_name(0)})" if torch.cuda.is_available() else "Intel CPU"
     print("=" * 80)
     print("BOARDMIND AI: SYSTEMATIC CV EXPERIMENTATION PIPELINE")
-    print("Environment: Intel Core i9-13900H CPU | Framework: Ultralytics YOLOv8/11")
+    print(f"Hardware Acceleration: {device_name} | Framework: Ultralytics YOLOv8/11")
     print("=" * 80)
 
     experiments = [

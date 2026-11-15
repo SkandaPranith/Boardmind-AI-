@@ -175,15 +175,29 @@ class ModularHandwritingRecognizer(BaseHandwritingRecognizer):
             try:
                 raw_res = self.ocr_engine(cv_for_ocr)
                 ocr_results = []
-                # Modern rapidocr (Python 3.13+): object with .boxes, .txts, .scores
-                if hasattr(raw_res, "txts") and raw_res.txts:
-                    for box, txt, score in zip(raw_res.boxes, raw_res.txts, raw_res.scores):
-                        ocr_results.append([box, txt, score])
-                # Legacy rapidocr_onnxruntime: tuple of (results, elapse)
-                elif isinstance(raw_res, tuple) and len(raw_res) >= 1:
-                    ocr_results = raw_res[0] or []
-                elif isinstance(raw_res, list):
-                    ocr_results = raw_res
+
+                # Extract inner result whether raw_res is a tuple (res, elapse) or direct output
+                inner = raw_res[0] if (isinstance(raw_res, tuple) and len(raw_res) >= 1) else raw_res
+
+                if inner is not None:
+                    # Case 1: RapidOCROutput dataclass (modern rapidocr with .boxes, .txts, .scores)
+                    if hasattr(inner, "txts") and inner.txts:
+                        boxes = getattr(inner, "boxes", [])
+                        txts = getattr(inner, "txts", [])
+                        scores = getattr(inner, "scores", [])
+                        for box, txt, score in zip(boxes, txts, scores):
+                            ocr_results.append([box, txt, score])
+                    # Case 2: raw_res itself is RapidOCROutput
+                    elif hasattr(raw_res, "txts") and raw_res.txts:
+                        for box, txt, score in zip(raw_res.boxes, raw_res.txts, raw_res.scores):
+                            ocr_results.append([box, txt, score])
+                    # Case 3: Standard list of [box, txt, score] items
+                    elif isinstance(inner, list):
+                        for item in inner:
+                            if isinstance(item, (list, tuple)) and len(item) >= 3:
+                                ocr_results.append(item)
+                            elif hasattr(item, "txt"):
+                                ocr_results.append([item.box, item.txt, item.score])
 
                 if ocr_results:
                     # Sort boxes by ymin (top-to-bottom reading order)
@@ -246,8 +260,8 @@ class ModularHandwritingRecognizer(BaseHandwritingRecognizer):
 # Global singleton recognizer instance
 _recognizer_instance: Optional[ModularHandwritingRecognizer] = None
 
-def get_handwriting_recognizer() -> ModularHandwritingRecognizer:
+def get_handwriting_recognizer(force_reload: bool = False) -> ModularHandwritingRecognizer:
     global _recognizer_instance
-    if _recognizer_instance is None:
+    if _recognizer_instance is None or force_reload:
         _recognizer_instance = ModularHandwritingRecognizer()
     return _recognizer_instance

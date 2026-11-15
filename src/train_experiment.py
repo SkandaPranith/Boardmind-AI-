@@ -84,15 +84,21 @@ def run_experiment(
     # Load model
     model = YOLO(model_source)
 
+    # Detect hardware acceleration
+    device = 0 if torch.cuda.is_available() else 'cpu'
+    use_amp = torch.cuda.is_available()
+    device_name = f"NVIDIA GPU ({torch.cuda.get_device_name(0)})" if torch.cuda.is_available() else "CPU"
+    print(f"Device:      {device_name} (amp={use_amp})")
+
     train_args = {
         'data': str(data_yaml),
         'epochs': epochs,
         'imgsz': imgsz,
         'batch': batch,
-        'device': 'cpu',
+        'device': device,
         'workers': 0,
         'cache': False,
-        'amp': False,
+        'amp': use_amp,
         'optimizer': optimizer,
         'lr0': lr0,
         'lrf': lrf,

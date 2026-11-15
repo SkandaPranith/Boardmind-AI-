@@ -28,40 +28,59 @@ class WhiteboardDetector:
 
     def _resolve_model_path(self, user_path: Optional[str]) -> Path:
         if user_path and Path(user_path).exists():
-            return Path(user_path)
+            return Path(user_path).resolve()
 
-        project_root = Path(__file__).resolve().parent.parent.parent
+        # Robust root resolution: walk up parent hierarchy until repo root is found
+        curr = Path(__file__).resolve().parent
+        project_root = None
+        for p in [curr] + list(curr.parents):
+            if (p / "models" / "whiteboard_detector_best.pt").exists() or (p / "datasets").exists():
+                project_root = p
+                break
+        
+        if project_root is None:
+            # Fallback: 4 levels up from backend/app/detection/whiteboard_detector.py -> repo root
+            project_root = Path(__file__).resolve().parent.parent.parent.parent
+
         candidates = [
             project_root / "models" / "whiteboard_detector_best.pt",
-            Path("models/whiteboard_detector_best.pt"),
+            project_root / "runs" / "whiteboard_optimization" / "exp0_baseline_yolov8n" / "weights" / "best.pt",
             project_root / "runs" / "whiteboard_optimization" / "exp1_aug_perspective_scale" / "weights" / "best.pt",
             project_root / "runs" / "whiteboard_detection_test" / "weights" / "best.pt",
-            project_root / "yolov8n.pt",
-            Path("yolov8n.pt")
+            Path("models/whiteboard_detector_best.pt"),
+            Path("../models/whiteboard_detector_best.pt"),
         ]
         for c in candidates:
             if c.exists():
                 return c.resolve()
-        raise FileNotFoundError("No trained whiteboard detection checkpoint found in models/ or runs/.")
+        raise FileNotFoundError(
+            f"No trained whiteboard detection checkpoint found. Checked candidates: {[str(c) for c in candidates]}"
+        )
 
     def detect(
         self,
         image: Image.Image,
         conf_threshold: float = 0.25,
-        iou_threshold: float = 0.6
+        iou_threshold: float = 0.6,
+        conf_board: Optional[float] = None,
+        conf_text: Optional[float] = None
     ) -> Tuple[List[BoundingBox], Optional[BoundingBox], Image.Image]:
         """
-        Runs whiteboard detection inference on a PIL image.
-        Returns:
-            - List of all detected BoundingBox objects
-            - Primary BoundingBox (most salient whiteboard)
-            - Annotated PIL Image with visual bounding boxes
+        Runs whiteboard and handwritten text detection inference on a PIL image.
+        Supports dual class-specific confidence thresholds:
+            - conf_board: Confidence threshold specifically for Whiteboard (e.g. 0.50)
+            - conf_text: Confidence threshold specifically for Handwritten text (e.g. 0.15)
+            - conf_threshold: Fallback threshold if specific class thresholds are not set
         """
+        c_board = conf_board if conf_board is not None else conf_threshold
+        c_text = conf_text if conf_text is not None else conf_threshold
+        min_conf = min(c_board, c_text, conf_threshold)
+
         orig_w, orig_h = image.size
-        # Run inference on CPU
+        # Run inference using the lowest requested threshold so no valid candidates are dropped early
         results = self.model.predict(
             source=image,
-            conf=conf_threshold,
+            conf=min_conf,
             iou=iou_threshold,
             device=self.device,
             imgsz=416,
@@ -78,10 +97,17 @@ class WhiteboardDetector:
             clss = results.boxes.cls.cpu().numpy()
 
             for i in range(len(boxes)):
-                xmin, ymin, xmax, ymax = boxes[i].tolist()
                 conf = float(confs[i])
                 cls_id = int(clss[i])
                 cls_name = self.class_names.get(cls_id, "Whiteboard")
+                is_whiteboard = ("whiteboard" in cls_name.lower()) or (cls_id == 1)
+
+                # Class-specific threshold gating
+                required_conf = c_board if is_whiteboard else c_text
+                if conf < required_conf:
+                    continue
+
+                xmin, ymin, xmax, ymax = boxes[i].tolist()
 
                 # Clamp to image boundaries
                 xmin = max(0.0, min(xmin, float(orig_w)))
@@ -108,22 +134,29 @@ class WhiteboardDetector:
                 )
                 detections.append(bbox)
 
+                # Color-code by class: Cyan (#0284c7) for Whiteboard, Orange (#ea580c) for Text
+                box_color = "#0284c7" if is_whiteboard else "#ea580c"
+
                 # Draw high-contrast bounding box on image
-                draw.rectangle([xmin, ymin, xmax, ymax], outline="#0284c7", width=4)
+                draw.rectangle([xmin, ymin, xmax, ymax], outline=box_color, width=4)
                 # Label banner
                 label = f"{cls_name} {conf:.1%}"
                 text_bbox = draw.textbbox((xmin + 4, max(0.0, ymin - 20)), label)
-                draw.rectangle([text_bbox[0] - 2, text_bbox[1] - 2, text_bbox[2] + 4, text_bbox[3] + 2], fill="#0284c7")
+                draw.rectangle([text_bbox[0] - 2, text_bbox[1] - 2, text_bbox[2] + 4, text_bbox[3] + 2], fill=box_color)
                 draw.text((xmin + 4, max(0.0, ymin - 20)), label, fill="white")
 
-        # Select primary detection (prioritize confidence and size)
+        # Select primary detection (prioritize whiteboard class, confidence and size)
         primary_box = None
         if detections:
+            # Filter for Whiteboard class (name 'Whiteboard' or class_id 1)
+            wb_detections = [b for b in detections if 'whiteboard' in b.class_name.lower() or b.class_id == 1]
+            pool = wb_detections if wb_detections else detections
+
             # Sort by area * confidence
             def score(b: BoundingBox):
                 area = (b.xmax - b.xmin) * (b.ymax - b.ymin)
                 return area * (b.confidence ** 2)
-            primary_box = max(detections, key=score)
+            primary_box = max(pool, key=score)
 
         return detections, primary_box, annotated_image
 
@@ -138,9 +171,9 @@ class WhiteboardDetector:
 # Global singleton detector instance
 _detector_instance: Optional[WhiteboardDetector] = None
 
-def get_whiteboard_detector() -> WhiteboardDetector:
+def get_whiteboard_detector(model_path: Optional[str] = None, force_reload: bool = False) -> WhiteboardDetector:
     global _detector_instance
-    if _detector_instance is None:
-        _detector_instance = WhiteboardDetector()
+    if _detector_instance is None or force_reload or (model_path is not None):
+        _detector_instance = WhiteboardDetector(model_path=model_path)
     return _detector_instance
 

@@ -71,6 +71,7 @@ def evaluate_checkpoint(
     batch=4,
     conf_threshold=0.25,
     iou_threshold=0.6,
+    device=None,
     save_dir=None
 ):
     """
@@ -87,12 +88,15 @@ def evaluate_checkpoint(
     # File size
     file_size_mb = model_path.stat().st_size / (1024 * 1024)
 
+    if device is None:
+        device = 0 if torch.cuda.is_available() else 'cpu'
+
     val_kwargs = {
         'data': str(data_yaml),
         'split': split,
         'imgsz': imgsz,
         'batch': batch,
-        'device': 'cpu',
+        'device': device,
         'workers': 0,
         'conf': conf_threshold,
         'iou': iou_threshold,
@@ -113,6 +117,26 @@ def evaluate_checkpoint(
     map50_95 = float(metrics.box.map)
     f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 1e-6 else 0.0
 
+    # Extract per-class breakdown
+    per_class = {}
+    if hasattr(metrics.box, 'ap_class_index') and len(metrics.box.ap_class_index) > 0:
+        for i, c in enumerate(metrics.box.ap_class_index):
+            c_id = int(c)
+            c_name = metrics.names.get(c_id, f"Class {c_id}")
+            c_p = float(metrics.box.p[i]) if len(metrics.box.p) > i else 0.0
+            c_r = float(metrics.box.r[i]) if len(metrics.box.r) > i else 0.0
+            c_ap50 = float(metrics.box.ap50[i]) if len(metrics.box.ap50) > i else 0.0
+            c_ap = float(metrics.box.ap[i]) if len(metrics.box.ap) > i else 0.0
+            c_f1 = (2 * c_p * c_r / (c_p + c_r)) if (c_p + c_r) > 1e-6 else 0.0
+            per_class[c_name] = {
+                'class_id': c_id,
+                'precision': round(c_p, 4),
+                'recall': round(c_r, 4),
+                'f1_score': round(c_f1, 4),
+                'mAP50': round(c_ap50, 4),
+                'mAP50_95': round(c_ap, 4)
+            }
+
     # Ultralytics speed dict (ms per image)
     speed = metrics.speed
     total_val_ms = sum(speed.values())
@@ -132,6 +156,7 @@ def evaluate_checkpoint(
         'total_latency_ms': round(total_val_ms, 2),
         'fps': round(1000.0 / total_val_ms, 1) if total_val_ms > 0 else 0,
         'model_size_mb': round(file_size_mb, 2),
+        'per_class': per_class
     }
 
     return results, metrics
