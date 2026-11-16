@@ -141,16 +141,20 @@ A student took a photo of their classroom whiteboard. The raw computer-vision OC
 Topic Hint: {topic_hint or 'Classroom Lecture Notes'}
 
 Please synthesize this into comprehensive, clean academic study notes.
-Structure your output in GitHub-Flavored Markdown with KaTeX formulas ($$ ... $$):
+Structure your output in GitHub-Flavored Markdown with KaTeX formulas ($$ ... $$) if applicable:
 - # [Comprehensive Lecture Title]
 - ## 🎯 1. Executive Summary & Core Concept
 - ## 🔍 2. Detailed Technical Breakdown & Definitions
 - ## 📊 3. Comparative Taxonomy or Key Attributes
-- ## 📐 4. Mathematical Formulations & Update Rules
-- ## ⚠️ 5. Golden Rules, Caveats & Overfitting Prevention
+- ## 📐 4. Formal Principles, Workflow or Formulations
+- ## ⚠️ 5. Important Caveats, Design Pitfalls & Best Practices
 - ## 📝 6. Actionable Exam Revision Summary
 
-Do not hallucinate irrelevant topics. Preserve the true academic meaning of the whiteboard notes."""
+Important Instruction:
+- Focus solely on the specific subject matter and domain of the whiteboard text above.
+- Ensure all caveats and pitfalls are strictly relevant to this domain (e.g., hardware/timing for computer architecture, algorithmic complexity for DSA, etc.).
+- Do not mention or borrow concepts from unrelated fields.
+- Do not hallucinate irrelevant topics. Preserve the true academic meaning of the whiteboard notes."""
 
         url = f"{self.ollama_host.rstrip('/')}/api/generate"
         payload = {
@@ -229,7 +233,7 @@ Present the core mathematical formulation of the concepts on the board:
 - Explain what each mathematical symbol and parameter represents.
 
 ## ⚠️ 5. Professor's Golden Rules, Caveats & Engineering Best Practices
-Explain every caveat, warning rule, or asterisk noted by the instructor (e.g., "A model is only as good as the data", Overfitting risks, bias-variance tradeoff, test set isolation). Detail why these principles are crucial in practice.
+Explain every caveat, warning rule, design trap, or engineering best practice relevant to the subject matter on the board. Detail why these principles are crucial in practice. (Only discuss machine learning concepts if the notes are genuinely about ML).
 
 ## 📚 6. Recommended Ecosystem, Tools & Learning Resources
 Detail the tools, platforms, and references written on the board (e.g. Google Colab, Jupyter Notebooks, Kaggle, TensorFlow, Scikit-learn, Andrew Ng's Machine Learning specialization) and explain how students should utilize them.
@@ -637,8 +641,8 @@ The whiteboard captures lecture topics and annotations recorded during class. Th
 # Global singleton explainer instance
 _explainer_instance: Optional[AIConceptExplainer] = None
 
-def get_ai_concept_explainer() -> AIConceptExplainer:
+def get_ai_concept_explainer(force_reload: bool = False) -> AIConceptExplainer:
     global _explainer_instance
-    if _explainer_instance is None:
+    if _explainer_instance is None or force_reload:
         _explainer_instance = AIConceptExplainer()
     return _explainer_instance

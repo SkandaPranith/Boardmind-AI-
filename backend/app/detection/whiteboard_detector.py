@@ -145,18 +145,51 @@ class WhiteboardDetector:
                 draw.rectangle([text_bbox[0] - 2, text_bbox[1] - 2, text_bbox[2] + 4, text_bbox[3] + 2], fill=box_color)
                 draw.text((xmin + 4, max(0.0, ymin - 20)), label, fill="white")
 
-        # Select primary detection (prioritize whiteboard class, confidence and size)
+        # Select primary detection (prioritize whiteboard class; fallback to unified text region)
         primary_box = None
         if detections:
-            # Filter for Whiteboard class (name 'Whiteboard' or class_id 1)
+            # 1. First priority: Explicit Whiteboard detection (class_id == 1 or 'whiteboard' in name)
             wb_detections = [b for b in detections if 'whiteboard' in b.class_name.lower() or b.class_id == 1]
-            pool = wb_detections if wb_detections else detections
-
-            # Sort by area * confidence
-            def score(b: BoundingBox):
-                area = (b.xmax - b.xmin) * (b.ymax - b.ymin)
-                return area * (b.confidence ** 2)
-            primary_box = max(pool, key=score)
+            if wb_detections:
+                def score(b: BoundingBox):
+                    area = (b.xmax - b.xmin) * (b.ymax - b.ymin)
+                    return area * (b.confidence ** 2)
+                primary_box = max(wb_detections, key=score)
+            else:
+                # 2. Second priority: If no macro whiteboard was detected (e.g. digital smartboard/screen),
+                # compute the bounding union of all detected text regions so the ENTIRE slide/board is preserved!
+                text_detections = [b for b in detections if 'text' in b.class_name.lower() or b.class_id == 0]
+                if text_detections:
+                    u_xmin = min(b.xmin for b in text_detections)
+                    u_ymin = min(b.ymin for b in text_detections)
+                    u_xmax = max(b.xmax for b in text_detections)
+                    u_ymax = max(b.ymax for b in text_detections)
+                    
+                    # Contextual padding (12% horizontal, 18% vertical) to include titles, margins & footer
+                    w = u_xmax - u_xmin
+                    h = u_ymax - u_ymin
+                    pad_xmin = max(0.0, u_xmin - w * 0.12)
+                    pad_ymin = max(0.0, u_ymin - h * 0.18)
+                    pad_xmax = min(float(orig_w), u_xmax + w * 0.12)
+                    pad_ymax = min(float(orig_h), u_ymax + h * 0.15)
+                    
+                    mean_conf = round(float(np.mean([b.confidence for b in text_detections])), 4)
+                    norm_box = [
+                        round(pad_xmin / orig_w, 4),
+                        round(pad_ymin / orig_h, 4),
+                        round(pad_xmax / orig_w, 4),
+                        round(pad_ymax / orig_h, 4)
+                    ]
+                    primary_box = BoundingBox(
+                        xmin=round(pad_xmin, 1),
+                        ymin=round(pad_ymin, 1),
+                        xmax=round(pad_xmax, 1),
+                        ymax=round(pad_ymax, 1),
+                        normalized=norm_box,
+                        confidence=mean_conf,
+                        class_id=1,
+                        class_name="Whiteboard (Screen ROI)"
+                    )
 
         return detections, primary_box, annotated_image
 
